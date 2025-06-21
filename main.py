@@ -15,9 +15,11 @@ ML_API = "https://api.mercadolibre.com"
 async def fetch_items_ids(user_id: str, token: str) -> list:
     ids = []
     offset = 0
-    while True:
+    total = 1  # valor ficticio para entrar al loop
+    headers = {"Authorization": f"Bearer {token}"}
+
+    while offset < total:
         url = f"{ML_API}/users/{user_id}/items/search?status=active&offset={offset}&limit=50"
-        headers = {"Authorization": f"Bearer {token}"}
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers)
             if r.status_code != 200:
@@ -25,7 +27,8 @@ async def fetch_items_ids(user_id: str, token: str) -> list:
                 return []
             data = r.json()
             batch_ids = data.get("results", [])
-            logging.info(f"🔹 Offset {offset} → {len(batch_ids)} IDs")
+            total = data.get("paging", {}).get("total", 0)
+            logging.info(f"🔹 Offset {offset} → {len(batch_ids)} IDs (de {total})")
             ids += batch_ids
             if len(batch_ids) < 50:
                 break
