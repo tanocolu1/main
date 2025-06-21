@@ -6,8 +6,8 @@ import asyncio
 app = FastAPI()
 
 class UserAuth(BaseModel):
-    user_id: 5743603449677326
-    access_token: TG-685614d2990dac000123e90d-178957816
+    user_id: str
+    access_token: str
 
 ML_API = "https://api.mercadolibre.com"
 
