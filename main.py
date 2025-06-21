@@ -19,15 +19,20 @@ async def fetch_items_ids(user_id: str, token: str) -> list:
 
     while offset < total:
         url = f"{ML_API}/users/{user_id}/items/search?status=active&offset={offset}&limit=50"
+        logging.info(f"📤 Solicitando: {url}")
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers)
+            logging.info(f"🔄 Respuesta {r.status_code}: {r.text[:500]}")
+
             if r.status_code != 200:
                 logging.error(f"❌ Error al obtener items: {r.status_code} {r.text}")
                 return []
+
             data = r.json()
             batch_ids = data.get("results", [])
             total = data.get("paging", {}).get("total", 0)
             logging.info(f"🔹 Offset {offset} → {len(batch_ids)} IDs (de {total})")
+
             ids += batch_ids
             if len(batch_ids) < 50:
                 break
