@@ -7,64 +7,68 @@ app = FastAPI()
 
 ACCESS_TOKEN = os.getenv("ML_ACCESS_TOKEN")
 USER_ID = os.getenv("ML_USER_ID")
-ORIGIN_ZIP = os.getenv("ML_ORIGIN_ZIP", "C1001")  # CABA por defecto
+ORIGIN_ZIP = os.getenv("ML_ORIGIN_ZIP", "C1001")
 
-headers = {
-    "Authorization": f"Bearer {ACCESS_TOKEN}"
-}
+HEADERS = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
 
-class ItemRequest(BaseModel):
+class SummaryRequest(BaseModel):
     item_id: str
     price: float
-    category_id: str
-    listing_type_id: str
+    category_id: str = None
+    listing_type_id: str = None
     currency_id: str = "ARS"
-    weight: float = 0.5
-    dimensions: str = "10x10x10"
+    dimensions: str = "20x20x20"
+    weight: float = 0.6
 
-@app.post("/get_fee_shipping")
-def get_fee_shipping(data: ItemRequest):
-    response_data = {
+@app.post("/get_summary")
+def get_summary(data: SummaryRequest):
+    result = {
         "item_id": data.item_id,
         "price": data.price
     }
 
-    # --- Comisión ---
+    # Obtener info de ítem para completar datos faltantes
+    item_resp = requests.get(f"https://api.mercadolibre.com/items/{data.item_id}", headers=HEADERS)
+    if item_resp.ok:
+        item_json = item_resp.json()
+        category_id = data.category_id or item_json.get("category_id")
+        listing_type_id = data.listing_type_id or item_json.get("listing_type_id")
+    else:
+        category_id = data.category_id
+        listing_type_id = data.listing_type_id
+
+    # Comisión real
     fee_url = "https://api.mercadolibre.com/items/fees"
     fee_payload = {
         "price": data.price,
-        "category_id": data.category_id,
-        "listing_type_id": data.listing_type_id,
+        "category_id": category_id,
+        "listing_type_id": listing_type_id,
         "currency_id": data.currency_id
     }
-    fee_resp = requests.post(fee_url, headers=headers, json=fee_payload)
+    fee_resp = requests.post(fee_url, headers=HEADERS, json=fee_payload)
     if fee_resp.ok:
-        fee_json = fee_resp.json()
-        response_data["sale_fee"] = fee_json.get("sale_fee")
-        response_data["fee_percent"] = fee_json.get("percentage")
+        fee_data = fee_resp.json()
+        result["sale_fee"] = fee_data.get("sale_fee")
+        result["fee_percent"] = fee_data.get("percentage")
     else:
-        response_data["sale_fee"] = None
-        response_data["fee_percent"] = None
+        result["sale_fee"] = None
+        result["fee_percent"] = None
 
-    # --- Costo de envío ---
+    # Costo de envío real
     shipping_url = f"https://api.mercadolibre.com/users/{USER_ID}/shipping_options"
     shipping_payload = {
         "zip_code": ORIGIN_ZIP,
-        "dimensions": f"{data.dimensions},{int(data.weight * 1000)}",  # en gramos
+        "dimensions": f"{data.dimensions},{int(data.weight * 1000)}",
         "item_price": data.price
     }
-    ship_resp = requests.post(shipping_url, headers=headers, json=shipping_payload)
-    if ship_resp.ok:
-        shipping_json = ship_resp.json()
-        options = shipping_json.get("options", [])
-        if options:
-            response_data["shipping_list_cost"] = options[0].get("list_cost")
-            response_data["shipping_method"] = options[0].get("name")
-        else:
-            response_data["shipping_list_cost"] = None
-            response_data["shipping_method"] = None
+    shipping_resp = requests.post(shipping_url, headers=HEADERS, json=shipping_payload)
+    if shipping_resp.ok:
+        shipping_data = shipping_resp.json()
+        option = shipping_data.get("options", [{}])[0]
+        result["shipping_list_cost"] = option.get("list_cost")
+        result["shipping_method"] = option.get("name")
     else:
-        response_data["shipping_list_cost"] = None
-        response_data["shipping_method"] = None
+        result["shipping_list_cost"] = None
+        result["shipping_method"] = None
 
-    return response_data
+    return result
