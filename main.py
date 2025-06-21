@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import httpx
 import asyncio
+import logging
 
 app = FastAPI()
 
@@ -19,9 +20,14 @@ async def fetch_items_ids(user_id: str, token: str) -> list:
         headers = {"Authorization": f"Bearer {token}"}
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers)
+            if r.status_code != 200:
+                logging.error(f"❌ Error al obtener items: {r.status_code} {r.text}")
+                return []
             data = r.json()
-            ids += data.get("results", [])
-            if len(data.get("results", [])) < 50:
+            batch_ids = data.get("results", [])
+            logging.info(f"🔹 Offset {offset} → {len(batch_ids)} IDs")
+            ids += batch_ids
+            if len(batch_ids) < 50:
                 break
             offset += 50
     return ids
@@ -35,11 +41,20 @@ async def fetch_details(ids: list, token: str) -> list:
             id_str = ",".join(group)
             url = f"{ML_API}/items?ids={id_str}"
             r = await client.get(url, headers=headers)
-            results += [x["body"] for x in r.json() if "body" in x]
+            if r.status_code != 200:
+                logging.error(f"❌ Error al obtener detalles: {r.status_code} {r.text}")
+                continue
+            batch = r.json()
+            results += [x["body"] for x in batch if "body" in x]
     return results
 
 @app.post("/get_full_items_report")
 async def get_full_items_report(auth: UserAuth):
+    logging.info(f"📥 Solicitando publicaciones para usuario {auth.user_id}")
     ids = await fetch_items_ids(auth.user_id, auth.access_token)
+    if not ids:
+        return {"status": "error", "message": "No se encontraron publicaciones activas o token inválido", "items": []}
+
     details = await fetch_details(ids, auth.access_token)
-    return details
+    logging.info(f"📦 Total publicaciones detalladas: {len(details)}")
+    return {"status": "ok", "items": details}
