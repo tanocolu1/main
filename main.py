@@ -12,7 +12,9 @@ def get_fee(item_id: str, price: float, token: str):
         "currency_id": "ARS"
     }
     headers = {
-        "Authorization": f"Bearer {token}"
+    "Authorization": f"Bearer {token}",
+    "User-Agent": "Python FastAPI Client"  # 👈 importante
+
     }
 
     response = requests.get(url, headers=headers, params=params)
