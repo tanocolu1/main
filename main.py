@@ -13,17 +13,25 @@ ML_API = "https://api.mercadolibre.com"
 
 async def fetch_items_ids(user_id: str, token: str) -> list:
     ids = []
+    scroll_id = None
     headers = {"Authorization": f"Bearer {token}"}
-    url = f"{ML_API}/users/{user_id}/items/search?status=active"
 
-    async with httpx.AsyncClient() as client:
-        r = await client.get(url, headers=headers)
-        if r.status_code != 200:
-            logging.error(f"❌ Error al obtener items: {r.status_code} {r.text}")
-            return []
-        data = r.json()
-        ids = data.get("results", [])
-        logging.info(f"🔹 Obtenidos {len(ids)} IDs sin paginar.")
+    while True:
+        base_url = f"{ML_API}/items/search?user_id={user_id}&status=active&limit=50"
+        url = f"{base_url}&scroll_id={scroll_id}" if scroll_id else base_url
+
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code != 200:
+                logging.error(f"❌ Error al obtener items: {r.status_code} {r.text}")
+                return []
+            data = r.json()
+            batch_ids = data.get("results", [])
+            scroll_id = data.get("scroll_id")
+            logging.info(f"🔹 Scroll → {len(batch_ids)} IDs")
+            ids += batch_ids
+            if not scroll_id or not batch_ids:
+                break
     return ids
 
 async def fetch_details(ids: list, token: str) -> list:
