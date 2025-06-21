@@ -11,15 +11,17 @@ class UserAuth(BaseModel):
 
 ML_API = "https://api.mercadolibre.com"
 
-async def fetch_items_ids(user_id: int, token: str) -> list:
+async def fetch_items_ids_scan(user_id: int, token: str) -> list:
     ids = []
-    offset = 0
-    total = 1
     headers = {"Authorization": f"Bearer {token}"}
+    scroll_id = None
 
-    while offset < total:
-        url = f"{ML_API}/users/{user_id}/items/search?status=active&offset={offset}&limit=50"
+    while True:
+        url = f"{ML_API}/users/{user_id}/items/search?status=active&search_type=scan"
+        if scroll_id:
+            url += f"&scroll_id={scroll_id}"
         logging.info(f"📤 Solicitando: {url}")
+
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers)
             logging.info(f"🔄 Respuesta {r.status_code}: {r.text[:500]}")
@@ -30,13 +32,13 @@ async def fetch_items_ids(user_id: int, token: str) -> list:
 
             data = r.json()
             batch_ids = data.get("results", [])
-            total = data.get("paging", {}).get("total", 0)
-            logging.info(f"🔹 Offset {offset} → {len(batch_ids)} IDs (de {total})")
-
-            ids += batch_ids
-            if len(batch_ids) < 50:
+            if not batch_ids:
                 break
-            offset += 50
+
+            scroll_id = data.get("scroll_id")
+            ids += batch_ids
+            logging.info(f"🔹 Batch recibido: {len(batch_ids)} (Total acumulado: {len(ids)})")
+
     return ids
 
 async def fetch_details(ids: list, token: str) -> list:
@@ -58,7 +60,7 @@ async def fetch_details(ids: list, token: str) -> list:
 @app.post("/get_full_items_report")
 async def get_full_items_report(auth: UserAuth):
     logging.info(f"📥 Solicitando publicaciones para user_id {auth.user_id}")
-    ids = await fetch_items_ids(auth.user_id, auth.access_token)
+    ids = await fetch_items_ids_scan(auth.user_id, auth.access_token)
     if not ids:
         return {"status": "error", "message": "No se encontraron publicaciones activas o token inválido", "items": []}
 
