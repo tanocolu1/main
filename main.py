@@ -58,8 +58,56 @@ async def fetch_details(ids: list, token: str) -> list:
                 logging.error(f"❌ Error al obtener detalles: {r.status_code} {r.text}")
                 continue
             batch = r.json()
-            results += [x["body"] for x in batch if "body" in x]
+            for item in batch:
+                body = item.get("body", {})
+                body["commission_fee"] = await fetch_commission(body.get("id"), body.get("price"), token)
+                body["shipping_info"] = await fetch_shipping_cost(body.get("id"), body.get("price"), token)
+                body["stats"] = await fetch_sales_data(body.get("id"), token)
+                results.append(body)
     return results
+
+async def fetch_commission(item_id, price, token):
+    try:
+        url = f"https://api.mercadolibre.com/items/{item_id}/fees?price={price}"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200:
+                data = r.json()
+                return {
+                    "sale_fee": data.get("sale_fee"),
+                    "fee_percent": data.get("sale_fee") / price if price else None
+                }
+    except:
+        return None
+
+async def fetch_shipping_cost(item_id, price, token):
+    try:
+        url = f"https://api.mercadolibre.com/items/{item_id}/shipping_options?quantity=1&price={price}"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200:
+                data = r.json()
+                options = data.get("options", [])
+                if options:
+                    return {
+                        "list_cost": options[0].get("list_cost"),
+                        "shipping_method": options[0].get("name")
+                    }
+    except:
+        return None
+
+async def fetch_sales_data(item_id, token):
+    try:
+        url = f"https://api.mercadolibre.com/items/{item_id}/visits/time_window?last=60"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200:
+                return r.json()
+    except:
+        return None
 
 @app.post("/get_full_items_report")
 async def get_full_items_report(
