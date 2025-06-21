@@ -7,18 +7,18 @@ import logging
 app = FastAPI()
 
 class UserAuth(BaseModel):
-    user_id: str
+    nickname: str
     access_token: str
 
 ML_API = "https://api.mercadolibre.com"
 
-async def fetch_items_ids(user_id: str, token: str) -> list:
+async def fetch_items_ids(nickname: str, token: str) -> list:
     ids = []
     scroll_id = None
     headers = {"Authorization": f"Bearer {token}"}
 
     while True:
-        base_url = f"{ML_API}/users/{user_id}/items/search?status=active&limit=50"
+        base_url = f"{ML_API}/items/search?nickname={nickname}&status=active&limit=50"
         url = f"{base_url}&scroll_id={scroll_id}" if scroll_id else base_url
 
         async with httpx.AsyncClient() as client:
@@ -54,8 +54,8 @@ async def fetch_details(ids: list, token: str) -> list:
 
 @app.post("/get_full_items_report")
 async def get_full_items_report(auth: UserAuth):
-    logging.info(f"📥 Solicitando publicaciones para usuario {auth.user_id}")
-    ids = await fetch_items_ids(auth.user_id, auth.access_token)
+    logging.info(f"📥 Solicitando publicaciones para nickname {auth.nickname}")
+    ids = await fetch_items_ids(auth.nickname, auth.access_token)
     if not ids:
         return {"status": "error", "message": "No se encontraron publicaciones activas o token inválido", "items": []}
 
