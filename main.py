@@ -63,6 +63,10 @@ async def fetch_details(ids: list, token: str) -> list:
                 body["commission_fee"] = await fetch_commission(body.get("id"), body.get("price"), token)
                 body["shipping_info"] = await fetch_shipping_cost(body.get("id"), body.get("price"), token)
                 body["stats"] = await fetch_sales_data(body.get("id"), token)
+                body["catalog_data"] = await fetch_catalog_data(body.get("catalog_product_id"), token)
+                body["variations"] = await fetch_variations(body.get("id"), token)
+                body["questions"] = await fetch_questions(body.get("id"), token)
+                body["listing_info"] = await fetch_listing_data(body.get("id"), token)
                 results.append(body)
     return results
 
@@ -101,6 +105,56 @@ async def fetch_shipping_cost(item_id, price, token):
 async def fetch_sales_data(item_id, token):
     try:
         url = f"https://api.mercadolibre.com/items/{item_id}/visits/time_window?last=60"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200:
+                return r.json()
+    except:
+        return None
+
+async def fetch_catalog_data(catalog_id, token):
+    if not catalog_id:
+        return None
+    try:
+        url = f"https://api.mercadolibre.com/products/{catalog_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200:
+                return r.json()
+    except:
+        return None
+
+async def fetch_variations(item_id, token):
+    try:
+        url = f"https://api.mercadolibre.com/items/{item_id}/variations"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200:
+                return r.json()
+    except:
+        return None
+
+async def fetch_questions(item_id, token):
+    try:
+        url = f"https://api.mercadolibre.com/questions/search?item_id={item_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx.AsyncClient() as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200:
+                data = r.json()
+                return {
+                    "total": data.get("total", 0),
+                    "questions": data.get("questions", [])
+                }
+    except:
+        return None
+
+async def fetch_listing_data(item_id, token):
+    try:
+        url = f"https://api.mercadolibre.com/items/{item_id}/status"
         headers = {"Authorization": f"Bearer {token}"}
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers)
