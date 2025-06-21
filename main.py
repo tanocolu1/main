@@ -1,26 +1,24 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 import httpx
-import asyncio
 import logging
 
 app = FastAPI()
 
 class UserAuth(BaseModel):
-    nickname: str
+    user_id: str
     access_token: str
 
 ML_API = "https://api.mercadolibre.com"
 
-async def fetch_items_ids(nickname: str, token: str) -> list:
+async def fetch_items_ids(user_id: str, token: str) -> list:
     ids = []
-    scroll_id = None
+    offset = 0
+    total = 1
     headers = {"Authorization": f"Bearer {token}"}
 
-    while True:
-        base_url = f"{ML_API}/items/search?nickname={nickname}&status=active&limit=50"
-        url = f"{base_url}&scroll_id={scroll_id}" if scroll_id else base_url
-
+    while offset < total:
+        url = f"{ML_API}/users/{user_id}/items/search?status=active&offset={offset}&limit=50"
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers)
             if r.status_code != 200:
@@ -28,12 +26,12 @@ async def fetch_items_ids(nickname: str, token: str) -> list:
                 return []
             data = r.json()
             batch_ids = data.get("results", [])
-            logging.info(f"🔹 Obtenidos {len(batch_ids)} IDs")
+            total = data.get("paging", {}).get("total", 0)
+            logging.info(f"🔹 Offset {offset} → {len(batch_ids)} IDs (de {total})")
             ids += batch_ids
-
-            scroll_id = data.get("scroll_id")
-            if not scroll_id or not batch_ids:
+            if len(batch_ids) < 50:
                 break
+            offset += 50
     return ids
 
 async def fetch_details(ids: list, token: str) -> list:
@@ -54,8 +52,8 @@ async def fetch_details(ids: list, token: str) -> list:
 
 @app.post("/get_full_items_report")
 async def get_full_items_report(auth: UserAuth):
-    logging.info(f"📥 Solicitando publicaciones para nickname {auth.nickname}")
-    ids = await fetch_items_ids(auth.nickname, auth.access_token)
+    logging.info(f"📥 Solicitando publicaciones para user_id {auth.user_id}")
+    ids = await fetch_items_ids(auth.user_id, auth.access_token)
     if not ids:
         return {"status": "error", "message": "No se encontraron publicaciones activas o token inválido", "items": []}
 
