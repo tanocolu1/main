@@ -6,19 +6,19 @@ import logging
 app = FastAPI()
 
 class UserAuth(BaseModel):
-    user_id: str
     access_token: str
+    user_id: int
 
 ML_API = "https://api.mercadolibre.com"
 
-async def fetch_items_ids(user_id: str, token: str) -> list:
+async def fetch_items_ids(user_id: int, token: str) -> list:
     ids = []
     offset = 0
     total = 1
     headers = {"Authorization": f"Bearer {token}"}
 
     while offset < total:
-        url = f"{ML_API}/users/me/items/search?status=active&offset={offset}&limit=50"
+        url = f"{ML_API}/users/{user_id}/items/search?status=active&offset={offset}&limit=50"
         logging.info(f"📤 Solicitando: {url}")
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers)
