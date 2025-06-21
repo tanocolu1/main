@@ -18,7 +18,7 @@ async def fetch_items_ids(user_id: str, token: str) -> list:
     headers = {"Authorization": f"Bearer {token}"}
 
     while offset < total:
-        url = f"{ML_API}/users/{user_id}/items/search?status=active&offset={offset}&limit=50"
+        url = f"{ML_API}/users/me/items/search?status=active&offset={offset}&limit=50"
         logging.info(f"📤 Solicitando: {url}")
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers)
